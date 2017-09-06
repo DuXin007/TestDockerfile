@@ -1,29 +1,10 @@
-FROM debian:jessie-slim
+FROM alpine:3.6
 
 # add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
-RUN groupadd -r redis && useradd -r -g redis redis
+RUN addgroup -S redis && adduser -S -G redis redis
 
-# grab gosu for easy step-down from root
-# https://github.com/tianon/gosu/releases
-ENV GOSU_VERSION 1.10
-RUN set -ex; \
-	\
-	fetchDeps='ca-certificates wget'; \
-	apt-get update; \
-	apt-get install -y --no-install-recommends $fetchDeps; \
-	rm -rf /var/lib/apt/lists/*; \
-	\
-	dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
-	wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch"; \
-	wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc"; \
-	export GNUPGHOME="$(mktemp -d)"; \
-	gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \
-	gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
-	rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc; \
-	chmod +x /usr/local/bin/gosu; \
-	gosu nobody true; \
-	\
-	apt-get purge -y --auto-remove $fetchDeps
+# grab su-exec for easy step-down from root
+RUN apk add --no-cache 'su-exec>=0.2'
 
 ENV REDIS_VERSION 3.2.10
 ENV REDIS_DOWNLOAD_URL http://download.redis.io/releases/redis-3.2.10.tar.gz
@@ -32,16 +13,13 @@ ENV REDIS_DOWNLOAD_SHA 411c604a716104f7f5a326abfad32de9cea10f15f987bec45cf86f315
 # for redis-sentinel see: http://redis.io/topics/sentinel
 RUN set -ex; \
 	\
-	buildDeps=' \
-		wget \
-		\
+	apk add --no-cache --virtual .build-deps \
+		coreutils \
 		gcc \
-		libc6-dev \
+		linux-headers \
 		make \
-	'; \
-	apt-get update; \
-	apt-get install -y $buildDeps --no-install-recommends; \
-	rm -rf /var/lib/apt/lists/*; \
+		musl-dev \
+	; \
 	\
 	wget -O redis.tar.gz "$REDIS_DOWNLOAD_URL"; \
 	echo "$REDIS_DOWNLOAD_SHA *redis.tar.gz" | sha256sum -c -; \
@@ -64,14 +42,14 @@ RUN set -ex; \
 	\
 	rm -r /usr/src/redis; \
 	\
-	apt-get purge -y --auto-remove $buildDeps
+	apk del .build-deps
 
 RUN mkdir /data && chown redis:redis /data
 VOLUME /data
 WORKDIR /data
 
 COPY docker-entrypoint.sh /usr/local/bin/
-##ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 EXPOSE 6379
 CMD ["redis-server"]
