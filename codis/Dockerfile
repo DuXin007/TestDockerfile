@@ -9,6 +9,6 @@ ENV PATH   ${GOPATH}/bin:${PATH}:${CODIS}/bin
 COPY . ${CODIS}
 
 RUN make -C ${CODIS} distclean
-RUN make -C ${CODIS} build-all
+#RUN make -C ${CODIS} build-all
 
 WORKDIR /codis
